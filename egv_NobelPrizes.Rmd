@@ -1,0 +1,154 @@
+---
+title: "Nobel Prize API JSON Data Assignment"
+author: "Escarlet Gabriel Vicente"
+date: "2025-11-09"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## 1. Introduction
+For this assignment, I worked with the **Nobel Prize API**, which provides open data about Nobel laureates and prizes in JSON format. The data includes information such as laureates’ birthplaces, nationalities, affiliations, prize categories, and award years.  
+
+The goal of this analysis was to retrieve data directly from the Nobel Prize API and answer four questions:  
+1. Which countries have produced the most Nobel laureates?  
+2. What is the average age of laureates when they received their Nobel Prize (by category)?  
+3. How many Nobel Prizes have been awarded per decade?  
+4. Which continents have produced the most Nobel laureates?  
+
+---
+
+## 2. Load Libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(httr)
+library(jsonlite)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(purrr)
+library(lubridate)
+```
+
+---
+
+## 3. Access the API
+
+The Nobel Prize API provides two main endpoints:
+
+* **Laureates:** [https://api.nobelprize.org/2.1/laureates](https://api.nobelprize.org/2.1/laureates)
+* **Prizes:** [https://api.nobelprize.org/2.1/nobelPrizes](https://api.nobelprize.org/2.1/nobelPrizes)
+
+```{r}
+laureates_response <- GET("https://api.nobelprize.org/2.1/laureates")
+nobel_response <- GET("https://api.nobelprize.org/2.1/nobelPrizes")
+
+# Check status (should be 200)
+status_code(laureates_response)
+status_code(nobel_response)
+```
+
+---
+
+## 4. Parse JSON
+
+```{r}
+laureates_json <- content(laureates_response, "text")
+nobel_json <- content(nobel_response, "text")
+
+laureates_data <- fromJSON(laureates_json, flatten = TRUE)
+nobel_data <- fromJSON(nobel_json, flatten = TRUE)
+
+names(laureates_data)
+names(nobel_data)
+```
+
+---
+
+## 5. Explore the Laureates Data
+
+```{r}
+names(laureates_data$laureates)
+```
+
+---
+
+## 6. Countries That Have Produced the Most Nobel Laureates
+
+```{r}
+country_counts <- laureates_data$laureates %>%
+filter(!is.na(birth.place.countryNow.en)) %>%
+count(birth.place.countryNow.en, sort = TRUE)
+
+kable(head(country_counts, 10),
+caption = "Top 10 Countries by Number of Nobel Laureates")
+```
+
+**Observation:**
+The data shows that countries such as the United States and Germany have consistently produced the most Nobel laureates. This could reflect their long-standing commitment to education, innovation, and international collaboration.
+
+---
+
+## 7. Average Age of Laureates at the Time of the Award
+
+```{r}
+age_by_category <- laureates_data$laureates %>%
+tidyr::unnest(nobelPrizes, names_sep = "_") %>%
+filter(!is.na(birth.date), !is.na(nobelPrizes_awardYear)) %>%
+mutate(
+age_at_award = as.numeric(nobelPrizes_awardYear) -
+as.numeric(substr(birth.date, 1, 4))
+) %>%
+group_by(nobelPrizes_category.en) %>%
+summarise(avg_age = round(mean(age_at_award, na.rm = TRUE), 1),
+.groups = "drop") %>%
+arrange(nobelPrizes_category.en)
+
+kable(age_by_category, caption = "Average Age at Award by Category")
+```
+
+**Observation:**
+Most Nobel laureates receive recognition in their mid to late adulthood, usually between 50 and 63 years old. This trend suggests that major contributions are often acknowledged after decades of research, leadership, or creative work.
+
+---
+
+## 8. Nobel Prizes Awarded per Decade
+
+```{r}
+prizes_by_decade <- nobel_data$nobelPrizes %>%
+mutate(decade = (as.numeric(awardYear) %/% 10) * 10) %>%
+count(decade) %>%
+arrange(decade)
+
+kable(prizes_by_decade, caption = "Number of Nobel Prizes Awarded by Decade")
+```
+
+**Observation:**
+About 25 Nobel Prizes were awarded in the 1900s, marking the early phase of the award’s history and the beginning of its international recognition.
+
+---
+
+## 9. Distribution of Nobel Laureates by Continent
+
+```{r}
+continent_counts <- laureates_data$laureates %>%
+filter(!is.na(birth.place.continent.en)) %>%
+count(birth.place.continent.en, sort = TRUE)
+
+kable(continent_counts, caption = "Number of Nobel Laureates by Continent")
+
+```
+
+**Observation:**
+Most Nobel laureates originate from Europe, with Asia and North America ranking next. The results highlight Europe’s enduring academic presence and the growing recognition of contributions from other regions.
+
+---
+
+## 10. Conclusion
+
+Through the Nobel Prize API, I extracted and analyzed JSON data about laureates and their awards. This analysis demonstrated how to connect to an open API, parse nested JSON data, and derive meaningful insights using R.
+
+By exploring country patterns, age trends, and regional distributions, I gained a clearer understanding of the historical and global factors shaping Nobel recognition.
